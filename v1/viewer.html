@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32-CAM Live Stream</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #1a1a1a;
+            color: white;
+            padding: 20px;
+        }
+        #container {
+            max-width: 800px;
+            width: 100%;
+        }
+        #stream {
+            width: 100%;
+            border: 3px solid #4CAF50;
+            border-radius: 8px;
+        }
+        #controls {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #2a2a2a;
+            border-radius: 8px;
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background-color: #333;
+            color: white;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #666;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .connected {
+            background-color: #4CAF50;
+        }
+        .disconnected {
+            background-color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>ESP32-CAM Live Stream</h1>
+        
+        <img id="stream" src="" alt="Waiting for stream...">
+        
+        <div id="controls">
+            <div>
+                <label>ESP32 IP/Domain:</label>
+                <input type="text" id="ipAddress" placeholder="e.g., 192.168.1.100 or yourddns.com" value="">
+            </div>
+            <div>
+                <button id="connectBtn" onclick="connect()">Connect</button>
+                <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+            </div>
+            <div id="status" class="disconnected">Status: Disconnected</div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        let imgElement = document.getElementById('stream');
+        let statusElement = document.getElementById('status');
+        let connectBtn = document.getElementById('connectBtn');
+        let disconnectBtn = document.getElementById('disconnectBtn');
+
+        function connect() {
+            let ip = document.getElementById('ipAddress').value;
+            if (!ip) {
+                alert('Please enter ESP32 IP address or domain');
+                return;
+            }
+
+            // Connect to WebSocket
+            ws = new WebSocket(`ws://${ip}:81`);
+            ws.binaryType = 'arraybuffer';
+
+            ws.onopen = function() {
+                statusElement.textContent = 'Status: Connected';
+                statusElement.className = 'connected';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                console.log('WebSocket connected');
+            };
+
+            ws.onmessage = function(event) {
+                // Convert binary data to image
+                let arrayBuffer = event.data;
+                let bytes = new Uint8Array(arrayBuffer);
+                let blob = new Blob([bytes], {type: 'image/jpeg'});
+                let url = URL.createObjectURL(blob);
+                
+                // Update image
+                let oldUrl = imgElement.src;
+                imgElement.src = url;
+                
+                // Clean up old URL to prevent memory leak
+                if (oldUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(oldUrl);
+                }
+            };
+
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                statusElement.textContent = 'Status: Error - Check console';
+                statusElement.className = 'disconnected';
+            };
+
+            ws.onclose = function() {
+                statusElement.textContent = 'Status: Disconnected';
+                statusElement.className = 'disconnected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                console.log('WebSocket disconnected');
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+    </script>
+</body>
+</html>
